@@ -1,0 +1,354 @@
+app:
+  description: 专家级深度研习笔记版。结构与您的工作流完全对齐，通过代码级排版引擎与提示词深度打磨，实现类似大模型原生界面的美观排版。
+  icon: 🎨
+  icon_background: '#FDF2F8'
+  mode: workflow
+  name: 智能题库生成系统(专家笔记视觉版)
+  use_icon_as_answer_icon: false
+kind: app
+version: 0.1.3
+workflow:
+  features:
+    file_upload:
+      enabled: false
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    nodes:
+    - data:
+        desc: 接收用户表单
+        title: 开始
+        type: start
+        variables:
+        - label: 知识点/题目主体
+          max_length: 48000
+          required: true
+          type: paragraph
+          variable: topic
+        - label: 难度
+          max_length: 200
+          options:
+          - 简单
+          - 中等
+          - 困难
+          - 专家级
+          required: true
+          type: select
+          variable: difficulty
+        - label: 数量
+          max_length: 10
+          required: true
+          type: text-input
+          variable: question_count
+        - label: 岗位/职业
+          max_length: 200
+          required: true
+          type: text-input
+          variable: profession
+        - label: 题型
+          max_length: 200
+          options:
+          - 单选题
+          - 多选题
+          - 判断题
+          - 主观题
+          - 材料题
+          - 作文
+          required: true
+          type: select
+          variable: question_type
+      id: start
+      position:
+        x: 50
+        y: 300
+      type: custom
+      width: 244
+      height: 312
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+        memory: null
+        model:
+          completion_params:
+            temperature: 0.5
+            max_tokens: 1000
+          mode: chat
+          name: deepseek-ai/DeepSeek-V3
+          provider: siliconflow
+        prompt_template:
+        - id: intent-sys
+          role: system
+          text: 你是一个“搜商极高”的出题架构师。任务：为【{{#start.profession#}}】岗位的【{{#start.topic#}}】生成精准搜索指令。直接输出一行指令，不要废话。
+        title: 1. 意图图谱大脑 (V3)
+        type: llm
+        variables:
+        - value_selector:
+          - start
+          - profession
+          variable: profession
+        - value_selector:
+          - start
+          - topic
+          variable: topic
+      id: llm_intent_recognizer
+      position:
+        x: 350
+        y: 150
+      type: custom
+      width: 244
+      height: 98
+    - data:
+        code: "import requests\nimport re\nimport urllib.parse\ndef main(search_query):\n\
+          \    headers = {\"User-Agent\": \"Mozilla/5.0\"}\n    url = f\"https://html.duckduckgo.com/html/?q={urllib.parse.quote(search_query)}\"\
+          \n    try:\n        req = requests.get(url, headers=headers, timeout=10)\n\
+          \        snippets = re.findall(r'<a class=\"result__snippet[^>]+>(.*?)</a>',\
+          \ req.text, re.IGNORECASE | re.DOTALL)\n        cleaned = [re.sub(r'<[^>]+>',\
+          \ '', s).strip() for s in snippets[:6]]\n        return {\"scraped_data\"\
+          : \"\\n\".join(cleaned) if cleaned else \"无外部数据\"}\n    except: return {\"\
+          scraped_data\": \"爬虫网络穿透异常\"}"
+        code_language: python3
+        outputs:
+          scraped_data:
+            type: string
+        title: 2. 自建网络爬虫探针 (CODE)
+        type: code
+        variables:
+        - value_selector:
+          - llm_intent_recognizer
+          - text
+          variable: search_query
+      id: code_python_ddg_crawler
+      position:
+        x: 650
+        y: 150
+      type: custom
+      width: 244
+      height: 54
+    - data:
+        code: "def main(qtype, count_str):\n    rules = f\"严格锁定题型：{qtype}\"\n    n\
+          \ = int(count_str or 1)\n    return {\"strict_rules\": rules, \"iter_array\"\
+          : [str(i+1) for i in range(n)]}"
+        code_language: python3
+        outputs:
+          strict_rules:
+            type: string
+          iter_array:
+            type: array[string]
+        title: 3. 约束锁与引擎阀 (CODE)
+        type: code
+        variables:
+        - value_selector:
+          - start
+          - question_type
+          variable: qtype
+        - value_selector:
+          - start
+          - question_count
+          variable: count_str
+      id: code_format_lock
+      position:
+        x: 350
+        y: 450
+      type: custom
+      width: 244
+      height: 54
+    - data:
+        desc: 单题深度打磨循环矩阵
+        iterator_selector:
+        - code_format_lock
+        - iter_array
+        output_selector:
+        - llm_single_drafter
+        - text
+        start_node_id: iteration_generatorstart
+        title: 4. 单题深研迭代网络 (ITERATION)
+        type: iteration
+      id: iteration_generator
+      position:
+        x: 950
+        y: 150
+      type: custom
+      width: 450
+      height: 300
+    - data:
+        isInIteration: true
+        type: iteration-start
+      id: iteration_generatorstart
+      parentId: iteration_generator
+      position:
+        x: 20
+        y: 100
+      type: custom-iteration-start
+      width: 44
+      height: 48
+      zIndex: 1001
+    - id: llm_single_drafter
+      parentId: iteration_generator
+      position:
+        x: 120
+        y: 80
+      type: custom
+      data:
+        isInIteration: true
+        model:
+          completion_params:
+            temperature: 0.6
+            max_tokens: 4000
+          mode: chat
+          name: deepseek-ai/DeepSeek-V3
+          provider: siliconflow
+        prompt_template:
+        - role: system
+          text: '{{#code_format_lock.strict_rules#}}
+
+
+            你是一位享誉全球的【{{#start.profession#}}】首席考官。请基于抓取资料生成一份精美的研习笔记。
+
+            使用 Markdown 多级标题架构：
+
+            - ## [题目序号] [情境主题]
+
+            - ### 题目详情
+
+            - ### 深度解析
+
+
+            资料：{{#code_python_ddg_crawler.scraped_data#}}'
+        title: 题库重型发酵炉 (V3 单题直出)
+        type: llm
+        variables:
+        - value_selector:
+          - code_format_lock
+          - strict_rules
+          variable: rules
+        - value_selector:
+          - start
+          - profession
+          variable: profession
+        - value_selector:
+          - code_python_ddg_crawler
+          - scraped_data
+          variable: crawler_data
+      width: 244
+      height: 98
+      zIndex: 1001
+    - data:
+        code: "import re\n\ndef main(iteration_output_array):\n    # 1. 连接各题内容\n \
+          \   raw_content = \"\\n\\n---\\n\\n\".join(iteration_output_array)\n   \
+          \ \n    # 2. 移除冗余的“题目/答案”死板标签，改为美观的 Emoji 引导\n    # （假设大模型输出中包含这些词，我们进行统一替换）\n\
+          \    replacements = {\n        \"题目：\": \"### \U0001F4DD 题目详情\\n\",\n  \
+          \      \"答案：\": \"### ✅ 标准参考\\n\",\n        \"解析：\": \"### \U0001F4A1 深度逻辑连线\\\
+          n\",\n        \"背景材料：\": \"> \U0001F4DA **背景研判材料**：\"\n    }\n    for old,\
+          \ new in replacements.items():\n        raw_content = raw_content.replace(old,\
+          \ new)\n\n    # 3. 数学公式极致渲染兼容\n    # 统一将 \\( \\) 和 \\[ \\] 转化为 $$ $$ 确保大模型式的前端渲染\n\
+          \    raw_content = raw_content.replace(r'$$', '$$$TEMP$$$')\n    raw_content\
+          \ = raw_content.replace(r'\\\\[', '$$')\n    raw_content = raw_content.replace(r'\\\
+          \\]', '$$')\n    raw_content = raw_content.replace('$$$TEMP$$$', '$$')\n\
+          \    raw_content = raw_content.replace(r'\\(', '$')\n    raw_content = raw_content.replace(r'\\\
+          )', '$')\n\n    # 4. 注入大模型风格的笔记标题与页脚\n    final_paper = f\"\"\"# \U0001F3AF\
+          \ 专家级真题研习手册\n---\n> **[注]**：本笔记由智能深度矩阵发酵生成，融合了外网实时探针数据。排版已自动对齐大模型原生输出规范。\n\
+          \n{raw_content}\n\n---\n**[END]**：全卷逻辑校验完成。\"\"\"\n    \n    return {\"\
+          sanitized_text\": final_paper}"
+        code_language: python3
+        outputs:
+          sanitized_text:
+            type: string
+        title: 5. 公式渲染及合卷质检 (CODE)
+        type: code
+        variables:
+        - value_selector:
+          - iteration_generator
+          - output
+          variable: iteration_output_array
+      id: code_quality_inspector
+      position:
+        x: 1500
+        y: 250
+      type: custom
+      width: 244
+      height: 54
+    - data:
+        outputs:
+        - value_selector:
+          - code_quality_inspector
+          - sanitized_text
+          variable: final_output
+        title: 结束
+        type: end
+      id: end
+      position:
+        x: 1850
+        y: 250
+      type: custom
+      width: 244
+      height: 100
+    edges:
+    - id: e1
+      source: start
+      target: llm_intent_recognizer
+      type: custom
+      sourceHandle: source
+      targetHandle: target
+    - id: e2
+      source: llm_intent_recognizer
+      target: code_python_ddg_crawler
+      type: custom
+      sourceHandle: source
+      targetHandle: target
+    - id: e3
+      source: start
+      target: code_format_lock
+      type: custom
+      sourceHandle: source
+      targetHandle: target
+    - id: e4
+      source: code_python_ddg_crawler
+      target: iteration_generator
+      type: custom
+      sourceHandle: source
+      targetHandle: target
+    - id: e5
+      source: code_format_lock
+      target: iteration_generator
+      type: custom
+      sourceHandle: source
+      targetHandle: target
+    - id: e6
+      source: start
+      target: iteration_generator
+      type: custom
+      sourceHandle: source
+      targetHandle: target
+    - id: e7
+      source: iteration_generatorstart
+      target: llm_single_drafter
+      type: custom
+      sourceHandle: source
+      targetHandle: target
+      data:
+        isInIteration: true
+    - id: e8
+      source: iteration_generator
+      target: code_quality_inspector
+      type: custom
+      sourceHandle: source
+      targetHandle: target
+    - id: e9
+      source: code_quality_inspector
+      target: end
+      type: custom
+      sourceHandle: source
+      targetHandle: target

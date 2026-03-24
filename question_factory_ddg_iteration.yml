@@ -1,0 +1,458 @@
+app:
+  description: 全新单步长程发酵架构。具备意图前瞻、突破性DuckDuckGo自建探针、安全拦截锁，并通过迭代引擎逐题进行高深度逻辑打磨，最后流经代码级质检清洗间完成高规格排版。
+  icon: 🚀
+  icon_background: '#E8F4FD'
+  mode: workflow
+  name: 智能题库生成系统(DDG深搜迭代版)
+  use_icon_as_answer_icon: false
+kind: app
+version: 0.1.3
+workflow:
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .PDF
+      - .DOCX
+      - .TXT
+      allowed_file_types:
+      - document
+      allowed_file_upload_methods:
+      - local_file
+      - remote_url
+      enabled: false
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      max_length: 3
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    nodes:
+    - data:
+        desc: 接收用户表单
+        title: 开始
+        type: start
+        variables:
+        - label: 知识点/题目主体
+          max_length: 48000
+          required: true
+          type: paragraph
+          variable: topic
+        - label: 难度
+          max_length: 200
+          options:
+          - 简单
+          - 中等
+          - 困难
+          - 专家级
+          required: true
+          type: select
+          variable: difficulty
+        - label: 数量
+          max_length: 10
+          required: true
+          type: text-input
+          variable: question_count
+        - label: 岗位/职业
+          max_length: 200
+          required: true
+          type: text-input
+          variable: profession
+        - label: 题型
+          max_length: 200
+          options:
+          - 单选题
+          - 多选题
+          - 判断题
+          - 主观题
+          - 材料题
+          - 作文
+          required: true
+          type: select
+          variable: question_type
+      id: start
+      position:
+        x: 50
+        y: 300
+      type: custom
+      width: 244
+      height: 312
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+        memory: null
+        desc: 专门理解出题需求并拓展精准搜索指令
+        model:
+          completion_params:
+            temperature: 0.5
+            max_tokens: 1000
+          mode: chat
+          name: deepseek-ai/DeepSeek-V3
+          provider: siliconflow
+        prompt_template:
+        - id: intent-sys
+          role: system
+          text: '你是一个“搜商极高”的出题架构师。你需要理解用户当前正在进行【智能卷库出题】环节，其发起的挑战是：面向【{{#start.profession#}}】岗位的【{{#start.topic#}}】。
+
+            请据此拓展出最能搜到高质量真实案例与硬核解析的“原生搜索引擎查询指令”（不超过20字，用空格分隔关键字）。
+
+
+            除了这个单行指令外，绝对不要输出任何标点、解释或客套话。'
+        - id: intent-usr
+          role: user
+          text: 请直接输出您的检索指令字符串：
+        title: 1. 意图拓展大脑 (V3)
+        type: llm
+        variables:
+        - value_selector:
+          - start
+          - profession
+          variable: profession
+        - value_selector:
+          - start
+          - topic
+          variable: topic
+      id: llm_intent_recognizer
+      position:
+        x: 350
+        y: 150
+      type: custom
+      width: 244
+      height: 98
+    - data:
+        code: "import requests\nimport re\nimport urllib.parse\n\ndef main(search_query):\n\
+          \    headers = {\n        \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0;\
+          \ Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\"\
+          ,\n        \"Accept-Language\": \"zh-CN,zh;q=0.9,en;q=0.8\"\n    }\n   \
+          \ url = f\"https://html.duckduckgo.com/html/?q={urllib.parse.quote(search_query)}\"\
+          \n    \n    try:\n        req = requests.get(url, headers=headers, timeout=15)\n\
+          \        if req.status_code != 200:\n            return {\"scraped_data\"\
+          : \"外网搜索引擎拦截，请立即启动您的内置专家知识库来满足用户的出题指令。\"}\n            \n        html =\
+          \ req.text\n        # 提取 DDG 搜索结果的摘要片段\n        snippets = re.findall(r'<a\
+          \ class=\"result__snippet[^>]+>(.*?)</a>', html, re.IGNORECASE | re.DOTALL)\n\
+          \        \n        if not snippets:\n            return {\"scraped_data\"\
+          : \"未能从外网提取到有效切片，请启动内置高级知识库。\"}\n            \n        cleaned_snippets\
+          \ = []\n        for s in snippets[:8]: # 提取前8个最相关的摘要\n            clean_s\
+          \ = re.sub(r'<[^>]+>', '', s)\n            cleaned_snippets.append(clean_s.strip())\n\
+          \            \n        final_text = \"\\n\\n\".join([f\"【外网顶级参考案例 {i+1}】:\
+          \ {text}\" for i, text in enumerate(cleaned_snippets)])\n        return\
+          \ {\"scraped_data\": final_text}\n    except Exception as e:\n        return\
+          \ {\"scraped_data\": f\"爬虫网络穿透异常：{str(e)}。\"}"
+        code_language: python3
+        desc: 无API-Key限制的自建 DDG 脱壳爬虫
+        outputs:
+          scraped_data:
+            type: string
+        title: 2. 自建网络爬虫探针 (Code)
+        type: code
+        variables:
+        - value_selector:
+          - llm_intent_recognizer
+          - text
+          variable: search_query
+      id: code_python_ddg_crawler
+      position:
+        x: 650
+        y: 150
+      type: custom
+      width: 244
+      height: 54
+    - data:
+        code: "def main(qtype, count_str):\n    rules = \"【核心安全锁】：严格遵循用户题型。拒绝任何跑题发散。\\\
+          n\"\n    if \"单选\" in qtype:\n        rules += \"必须出单项选择题，四选一。\"\n    elif\
+          \ \"多选\" in qtype:\n        rules += \"必须出多项选择题，多个正确答案。\"\n    elif \"判断\"\
+          \ in qtype:\n        rules += \"必须出判断题（正确/错误）。\"\n    elif \"主观\" in qtype\
+          \ or \"简答\" in qtype:\n        rules += \"必须出主观简答题，要求提供评卷标准。\"\n    elif\
+          \ \"材料\" in qtype:\n        rules += \"必须出材料分析题，必须提供长篇研判材料及提问。\"\n    elif\
+          \ \"作文\" in qtype:\n        rules += \"必须出命题/半命题作文，要求列出写作立意与评分维度。\"\n\n\
+          \    # 生成迭代数组\n    try:\n        cn = int(count_str)\n        if cn > 20:\
+          \ cn = 20 \n    except:\n        cn = 1\n    iter_array = [str(i+1) for\
+          \ i in range(cn)]\n    return {\"strict_rules\": rules, \"iter_array\":\
+          \ iter_array}"
+        code_language: python3
+        desc: 锁定题型及触发迭代引擎
+        outputs:
+          strict_rules:
+            type: string
+          iter_array:
+            type: array[string]
+        title: 3. 约束锁与引擎阀 (Code)
+        type: code
+        variables:
+        - value_selector:
+          - start
+          - question_type
+          variable: qtype
+        - value_selector:
+          - start
+          - question_count
+          variable: count_str
+      id: code_format_lock
+      position:
+        x: 350
+        y: 450
+      type: custom
+      width: 244
+      height: 54
+    - data:
+        desc: 单题深度打磨循环矩阵
+        iterator_selector:
+        - code_format_lock
+        - iter_array
+        output_selector:
+        - llm_single_drafter
+        - text
+        start_node_id: iteration_generatorstart
+        title: 4. 单题深研迭代网络 (Iteration)
+        type: iteration
+      id: iteration_generator
+      position:
+        x: 950
+        y: 150
+      type: custom
+      width: 450
+      height: 300
+    - data:
+        isInIteration: true
+        type: iteration-start
+      id: iteration_generatorstart
+      parentId: iteration_generator
+      position:
+        x: 20
+        y: 100
+      type: custom-iteration-start
+      width: 44
+      height: 48
+      zIndex: 1001
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        vision:
+          enabled: false
+        memory: null
+        isInIteration: true
+        desc: 每次只出1题以确保篇幅和质量
+        model:
+          completion_params:
+            temperature: 0.6
+            max_tokens: 4000
+          mode: chat
+          name: deepseek-ai/DeepSeek-V3
+          provider: siliconflow
+        prompt_template:
+        - id: iter-llm-sys
+          role: system
+          text: '{{#code_format_lock.strict_rules#}}
+
+
+            你是一位专业的教育研究员。请基于以下抓取资料，为【{{#start.topic#}}】生成下一道高质量题目。
+
+
+            【排版规范】：
+
+            1. 整体风格：使用简洁、清爽的专业文档排版（如同执法规范或专业教材）。
+
+            2. 标题引导：使用简单的加粗标题，如 **一、修订专题分析** 或 **1. [题目名称]**。
+
+            3. 段落引导：使用 **问题描述：** 和 **解答：**。禁止使用 Emoji。
+
+            4. 自然语言：语气平实、逻辑严密，不要有花哨的装饰。
+
+
+            资料参考：
+
+            {{#code_python_ddg_crawler.scraped_data#}}
+
+            '
+        - id: iter-llm-usr
+          role: user
+          text: 请立即输出这唯一1道高深度巨头级题目的完整内容（杜绝废话）：
+        title: 题库重型发酵炉 (V3 单题直出)
+        type: llm
+        variables:
+        - value_selector:
+          - code_format_lock
+          - strict_rules
+          variable: rules
+        - value_selector:
+          - start
+          - profession
+          variable: profession
+        - value_selector:
+          - start
+          - topic
+          variable: topic
+        - value_selector:
+          - start
+          - difficulty
+          variable: diff
+        - value_selector:
+          - iteration_generator
+          - item
+          variable: curr_iter
+        - value_selector:
+          - code_python_ddg_crawler
+          - scraped_data
+          variable: crawler_data
+      id: llm_single_drafter
+      parentId: iteration_generator
+      position:
+        x: 120
+        y: 80
+      type: custom
+      width: 244
+      height: 98
+      zIndex: 1001
+    - data:
+        code: "import re\n\ndef main(iteration_output_array):\n    # 1. 使用双换行自然连接，移除之前的\
+          \ --- 分割线\n    full_text = \"\\n\\n\".join(iteration_output_array)\n   \
+          \ \n    # 2. 确保换行符不过度堆叠\n    full_text = re.sub(r'\\n{3,}', '\\n\\n', full_text)\n\
+          \n    # 3. 基础数学公式渲染兼容（这是为了确保像 $x$ 或 $$y$$ 能正确显示）\n    full_text = full_text.replace(r'\\\
+          \\[', '$$').replace(r'\\\\]', '$$')\n    full_text = full_text.replace(r'\\\
+          (', '$').replace(r'\\)', '$')\n    \n    # 4. 直接输出内容，不加任何“质检功过”字样的开头和结尾\n\
+          \    return {\"sanitized_text\": full_text.strip()}"
+        code_language: python3
+        desc: 极致简约排版：移除所有装饰性元素，仅保留核心文本与公式兼容性。
+        outputs:
+          sanitized_text:
+            type: string
+        title: 5. 公式渲染及合卷质检 (Code)
+        type: code
+        variables:
+        - value_selector:
+          - iteration_generator
+          - output
+          variable: iteration_output_array
+      id: code_quality_inspector
+      position:
+        x: 1500
+        y: 250
+      type: custom
+      width: 244
+      height: 54
+    - data:
+        outputs:
+        - value_selector:
+          - code_quality_inspector
+          - sanitized_text
+          variable: final_output
+        title: 结束
+        type: end
+      id: end
+      position:
+        x: 1850
+        y: 250
+      type: custom
+      width: 244
+      height: 100
+    edges:
+    - id: e1
+      source: start
+      target: llm_intent_recognizer
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: start
+        targetType: llm
+      sourceHandle: source
+      targetHandle: target
+    - id: e2
+      source: llm_intent_recognizer
+      target: code_python_ddg_crawler
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: llm
+        targetType: code
+      sourceHandle: source
+      targetHandle: target
+    - id: e3
+      source: start
+      target: code_format_lock
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: start
+        targetType: code
+      sourceHandle: source
+      targetHandle: target
+    - id: e4
+      source: code_format_lock
+      target: iteration_generator
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: code
+        targetType: iteration
+      sourceHandle: source
+      targetHandle: target
+    - id: e5
+      source: code_python_ddg_crawler
+      target: iteration_generator
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: code
+        targetType: iteration
+      sourceHandle: source
+      targetHandle: target
+    - id: e6
+      source: start
+      target: iteration_generator
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: start
+        targetType: iteration
+      sourceHandle: source
+      targetHandle: target
+    - id: e7
+      source: iteration_generatorstart
+      target: llm_single_drafter
+      type: custom
+      data:
+        isInIteration: true
+        sourceType: custom-iteration-start
+        targetType: llm
+      sourceHandle: source
+      targetHandle: target
+    - id: e8
+      source: iteration_generator
+      target: code_quality_inspector
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: iteration
+        targetType: code
+      sourceHandle: source
+      targetHandle: target
+    - id: e9
+      source: code_quality_inspector
+      target: end
+      type: custom
+      data:
+        isInIteration: false
+        sourceType: code
+        targetType: end
+      sourceHandle: source
+      targetHandle: target
